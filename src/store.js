@@ -1,25 +1,110 @@
-import { createStore } from 'redux';
+import { applyMiddleware, createStore, combineReducers } from "redux";
+import logger from "redux-logger";
+import thunk from "redux-thunk";
+import axios from "axios";
 
 const initialState = {
   groceries: [],
-  view: ''
+  view: "",
 };
-const store = createStore((state = initialState, action)=> {
-  if(action.type === 'LOAD'){
-    state = {...state, groceries: action.groceries };
+
+const _updateGrocery = (grocery) => {
+  return {
+    type: "UPDATE",
+    grocery,
+  };
+};
+
+export const updateGrocery = (grocery) => {
+  return async (dispatch) => {
+    const updatedGrocery = (
+      await axios.put(`/api/groceries/${grocery.id}`, {
+        purchased: !grocery.purchased,
+      })
+    ).data;
+    dispatch(_updateGrocery(updatedGrocery));
+  };
+};
+
+const _createGrocery = (grocery) => {
+  return {
+    type: "CREATE",
+    grocery,
+  };
+};
+
+export const createGrocery = (name) => {
+  return async (dispatch) => {
+    let newItem;
+    name
+      ? (newItem = (await axios.post("/api/groceries", { name })).data)
+      : (newItem = (await axios.post("/api/groceries/random")).data);
+    dispatch(_createGrocery(newItem));
+  };
+};
+
+const _bootstrap = (groceries) => {
+  return {
+    type: "LOAD",
+    groceries,
+  };
+};
+
+export const bootstrap = () => {
+  return async (dispatch) => {
+    const groceries = (await axios.get("/api/groceries")).data;
+    console.log(groceries);
+    dispatch(_bootstrap(groceries));
+  };
+};
+
+const _deleteGrocery = (grocery) => {
+  return {
+    type: "DELETE",
+    grocery,
+  };
+};
+
+export const deleteGrocery = (id) => {
+  return async (dispatch) => {
+    const groceryToDelete = (await axios.get(`/api/groceries/${id}`)).data;
+    console.log(groceryToDelete, "this is grocery to delete");
+    dispatch(_deleteGrocery(groceryToDelete));
+  };
+};
+
+const groceriesReducer = (state = [], action) => {
+  console.log(action, "this is action");
+  switch (action.type) {
+    case "LOAD":
+      return action.groceries;
+    case "UPDATE":
+      return state.map((grocery) =>
+        grocery.id === action.grocery.id ? action.grocery : grocery
+      );
+    case "CREATE":
+      return [...state, action.grocery];
+    case "DELETE":
+      return state.map((grocery) => grocery.id !== action.grocery.id);
+    default:
+      return state;
   }
-  if(action.type === 'UPDATE'){
-    state = {...state, groceries: state.groceries.map(grocery => grocery.id === action.grocery.id ? action.grocery : grocery )};
+};
+
+const viewReducer = (state = "", action) => {
+  switch (action.type) {
+    case "SET_VIEW":
+      return action.view;
+    default:
+      return state;
   }
-  if(action.type === 'CREATE'){
-    state = {...state, groceries: [...state.groceries, action.grocery ]}
-  }
-  if(action.type === 'SET_VIEW'){
-    state = {...state, view: action.view};
-  }
-  return state;
+};
+
+const reducer = combineReducers({
+  groceries: groceriesReducer,
+  view: viewReducer,
 });
 
+const store = createStore(reducer, applyMiddleware(logger, thunk));
+
 export default store;
-
-
